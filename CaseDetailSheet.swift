@@ -1,3 +1,11 @@
+//
+//  CaseDetailSheet.swift
+//  RapidCare
+//
+//  Created by Scelo Kevin on 2026/10/07.
+//
+
+
 import SwiftUI
 
 struct CaseDetailSheet: View {

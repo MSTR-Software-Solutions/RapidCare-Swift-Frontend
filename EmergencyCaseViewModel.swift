@@ -7,53 +7,62 @@
 
 import Foundation
 import Combine
-import CoreLocation
 
 @MainActor
 final class EmergencyCaseViewModel: ObservableObject {
-    @Published var locationName: String = ""
-    @Published var incidentType: IncidentType = .medicalEmergency
-    @Published var medicalEmergencyType: MedicalEmergencyType = .respiratoryDistress
-    @Published var severityLevel: SeverityLevel = .critical
-    @Published var incidentDescription: String = ""
-    
+    @Published var userCases: [EmergencyCase] = []
+    @Published var activeCase: EmergencyCase?
     @Published var isSubmitting: Bool = false
-    @Published var submittedCase: EmergencyCaseResponse?
+    @Published var isLoading: Bool = false
     @Published var errorMessage: String?
-    
-    let locationManager = LocationManager()
-    private let api = EmergencyAPIService.shared
-    
-    var canSubmit: Bool {
-        !locationName.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !incidentDescription.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !isSubmitting
-    }
-    
-    func submitCase(userId: Int) async {
-        guard canSubmit else { return }
+
+    var userId: Int = 1
+    private let api = EmergencyCaseAPIService.shared
+
+    // In EmergencyCaseViewModel.swift
+
+    func submitCase(type: String, description: String, location: String? = nil) async -> Bool {
+        guard !type.isEmpty, !description.isEmpty else {
+            errorMessage = "Please choose an emergency type and provide a description."
+            return false
+        }
+
         isSubmitting = true
         errorMessage = nil
         defer { isSubmitting = false }
-        
-        let lat = locationManager.location?.coordinate.latitude ?? -29.8587
-        let lon = locationManager.location?.coordinate.longitude ?? 31.0218
-        
-        let req = CreateEmergencyCaseRequest(
+
+        let request = CreateEmergencyCaseRequest(
             userId: userId,
-            location: locationName,
-            latitude: lat,
-            longitude: lon,
-            incidentType: incidentType,
-            medicalEmergencyType: incidentType == .medicalEmergency ? medicalEmergencyType : nil,
-            incidentDescription: incidentDescription,
-            severityLevel: severityLevel
+            caseName: "Case - \(type)",
+            location: location,
+            latitude: nil,
+            longitude: nil,
+            incidentType: "MEDICAL",
+            medicalEmergencyType: type,
+            incidentDescription: description,
+            severityLevel: "HIGH"
         )
-        
+
         do {
-            submittedCase = try await api.createEmergencyCase(request: req)
+            let newCase = try await api.createCase(request: request)
+            self.activeCase = newCase
+            self.userCases.insert(newCase, at: 0)
+            return true
         } catch {
-            errorMessage = error.localizedDescription
+            self.errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func loadUserCases() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            self.userCases = try await api.getCasesForUser(userId: userId)
+        } catch {
+            self.errorMessage = error.localizedDescription
         }
     }
 }
